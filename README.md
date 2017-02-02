@@ -70,6 +70,8 @@ fix:   either remove the module folder, or add a source file to the module
 Add an empty file `Sources/cpplib/empty.cpp`.
 Update `Package.swift` to exclude `Dependencies`, `build.sh`.
 
+Commit 7db39811f72128db9cc6cf77ee15b5c70c19b32a
+
 Build with the same command as Attempt 1. Output:
 
 ~~~
