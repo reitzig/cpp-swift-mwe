@@ -90,14 +90,36 @@ Apparently, the folder provided by `-L` does not take precedence as the
 documentation promises.
 
 
+## Interlude: A Workaround
+
+The problem is with who looks for libraries where.
+
+@aciidb0mb3r proposes a workaround in 
+[swiftpm.slack](https://swiftpm.slack.com/archives/help/p1486035484001308):
+
+> Run these two commands once:
+>
+> ~~~bash
+> mv Dependencies/libcpplib.dylib Dependencies/libcpplibVendored.dylib 
+> install_name_tool -id @executable_path/../../Dependencies/libcpplibVendored.dylib \
+>                   Dependencies/libcpplibVendored.dylib
+> ~~~
+>
+> Then use option `-Xlinker -lcpplibVendored` instead of `-Xlinker -lcpplib`.
+
+This fixed the build but does not generate a shippable product, 
+since in production the paths will be different.
+
+
 ## Thoughts
 
 It seems clear that the current design of SwiftPM does not consider dependencies
 that are provided as non-system binaries.
-Maybe there should be a `Package.Dependency.Binary` with initializer
+Maybe there should be a protocol `Dependency` -- currently `Package.dependencies`
+is of type `[Package]`! -- with a new subtype `Binary` with initializer
 
 ~~~swift
-.Binary(binary: String, header: String)
+Binary(binary: String, header: String)
 ~~~
 
 or similar. Note that the file may have to depend on the target platform and
