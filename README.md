@@ -4,6 +4,13 @@ A minimal example that investigates how to build a Swift project that depends on
 
 Built from [@aciidb0mb3r](https://github.com/aciidb0mb3r)'s [blog post](http://ankit.im/swift/2016/05/21/creating-objc-cpp-packages-with-swift-package-manager/).
 
+All of this is executed with
+
+    Apple Swift Package Manager - Swift 3.0.2 (swiftpm-11750)
+
+This is the latest Toolchain available through Apple's channels at the time of 
+this writing.
+
 ## Starting Point
 
 Following the blog post closely, the initial project (commit 565752f6e27633b41b6c62c1ead700ba4e8d7d95) 
@@ -29,3 +36,24 @@ in other Swift projects, in particular such developed in XCode.
 
 In case that is relevant, the library we want to build is to be used by
 iOS apps.
+
+## Attempt 1: No C++ sources, binary library
+
+Add `libcpplib.dylib` built with the Starting Point configuration.
+Remove `Sources/cpplib.cpp`.
+Add `build.sh` for convenience.
+
+Build with command:
+
+~~~bash
+swift build -Xlinker -L/path/to/Dependencies \
+            -Xlinker -lcpplib
+~~~
+
+Result:
+
+~~~
+error: the module at /path/to/cpp-swift-mwe/Sources/cpplib 
+       does not contain any source files
+fix:   either remove the module folder, or add a source file to the module
+~~~
