@@ -43,6 +43,8 @@ Add `libcpplib.dylib` built with the Starting Point configuration.
 Remove `Sources/cpplib.cpp`.
 Add `build.sh` for convenience.
 
+Commit 85700aa9aacca73b13e2082bba68853a13b37add
+
 Build with command:
 
 ~~~bash
