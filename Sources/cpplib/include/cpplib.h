@@ -1,0 +1,3 @@
+namespace cpplib {
+    int five();
+}
