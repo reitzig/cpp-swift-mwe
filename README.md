@@ -32,8 +32,9 @@ The ultimate goal is to use a C++ library -- let's call it C -- in Swift.
 Thus, as long as SwiftPM does not allow us to specify custom build instructions
 for dependencies,
 we have to supply the library as binary file, with headers to compile against.
+(In settings where sharing the sources of C is not an option, the need is even more immediate.)
 
-Ideally, we want to receive a single build result that can be easily referenced
+Ideally, we want to receive a build result that can be easily referenced
 in other Swift projects, in particular such developed in XCode.
 
 In case that is relevant, the library we want to build is to be used by
