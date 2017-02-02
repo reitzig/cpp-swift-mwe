@@ -88,3 +88,21 @@ clang: error: linker command failed with exit code 1 (use -v to see invocation)
 
 Apparently, the folder provided by `-L` does not take precedence as the 
 documentation promises.
+
+
+## Thoughts
+
+It seems clear that the current design of SwiftPM does not consider dependencies
+that are provided as non-system binaries.
+Maybe there should be a `Package.Dependency.Binary` with initializer
+
+~~~swift
+.Binary(binary: String, header: String)
+~~~
+
+or similar. Note that the file may have to depend on the target platform and
+architecture.  
+(Would we need parameters for the header language and whether to
+integrate the binary into the package binary?)
+
+Could this be implemented by SwiftPM by creating pkgconfig files?
