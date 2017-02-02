@@ -6,7 +6,7 @@ Built from [@aciidb0mb3r](https://github.com/aciidb0mb3r)'s [blog post](http://a
 
 ## Starting Point
 
-Following the blog post closely, the initial project is structured as follows:
+Following the blog post closely, the initial project ( 565752f6e27633b41b6c62c1ead700ba4e8d7d95 ) is structured as follows:
 the Swift module depends on a C wrapper around a C++ module with sources.
 
 `swift build` compiles all three modules; `.build/debug/swift` prints `5`.
