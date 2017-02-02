@@ -11,6 +11,7 @@ All of this is executed with
 This is the latest Toolchain available through Apple's channels at the time of 
 this writing.
 
+
 ## Starting Point
 
 Following the blog post closely, the initial project (commit 565752f6e27633b41b6c62c1ead700ba4e8d7d95) 
@@ -18,6 +19,7 @@ is structured as follows:
 the Swift module depends on a C wrapper around a C++ module with sources.
 
 `swift build` compiles all three modules; `.build/debug/swift` prints `5`.
+
 
 ## Goal
 
@@ -37,11 +39,13 @@ in other Swift projects, in particular such developed in XCode.
 In case that is relevant, the library we want to build is to be used by
 iOS apps.
 
+
 ## Attempt 1: No C++ sources, binary library
 
 Add `libcpplib.dylib` built with the Starting Point configuration.
-Remove `Sources/cpplib.cpp`.
-Add `build.sh` for convenience.
+Remove `Sources/cpplib/cpplib.cpp`.
+Add `build.sh` for convenience.  
+(Forgot to exclude the non-module stuff, but does not matter here; see Attempt 2.)
 
 Commit 85700aa9aacca73b13e2082bba68853a13b37add
 
@@ -52,10 +56,33 @@ swift build -Xlinker -L/path/to/Dependencies \
             -Xlinker -lcpplib
 ~~~
 
-Result:
+Output:
 
 ~~~
 error: the module at /path/to/cpp-swift-mwe/Sources/cpplib 
        does not contain any source files
 fix:   either remove the module folder, or add a source file to the module
 ~~~
+
+
+## Attempt 2: Dummy C++ sources, binary library
+
+Add an empty file `Sources/cpplib/empty.cpp`.
+Update `Package.swift` to exclude `Dependencies`, `build.sh`.
+
+Build with the same command as Attempt 1. Output:
+
+~~~
+Compile cpplib empty.cpp
+Linking cpplib
+Linking cwrapper
+Undefined symbols for architecture x86_64:
+  "cpplib::five()", referenced from:
+      _cwrapperfive in cwrapper.cpp.o
+ld: symbol(s) not found for architecture x86_64
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+<unknown>:0: error: build had 1 command failures
+~~~
+
+Apparently, the folder provided by `-L` does not take precedence as the 
+documentation promises.
