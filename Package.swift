@@ -5,5 +5,5 @@ let package = Package(
     targets: [Target(name: "cwrapper", dependencies:["cpplib"]),
               Target(name: "swift", dependencies:["cwrapper"]),
               ],
-    exclude: ["Dependencies", "build.sh"]
+    exclude: ["Dependencies", "configure.rb", "Makefile"]
 )

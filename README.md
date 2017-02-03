@@ -8,13 +8,13 @@ All of this is executed with
 
     Apple Swift Package Manager - Swift 3.0.2 (swiftpm-11750)
 
-This is the latest Toolchain available through Apple's channels at the time of 
+This is the latest Toolchain available through Apple's channels at the time of
 this writing.
 
 
 ## Starting Point
 
-Following the blog post closely, the initial project (commit 565752f6e27633b41b6c62c1ead700ba4e8d7d95) 
+Following the blog post closely, the initial project (commit 565752f6e27633b41b6c62c1ead700ba4e8d7d95)
 is structured as follows:
 the Swift module depends on a C wrapper around a C++ module with sources.
 
@@ -60,7 +60,7 @@ swift build -Xlinker -L/path/to/Dependencies \
 Output:
 
 ~~~
-error: the module at /path/to/cpp-swift-mwe/Sources/cpplib 
+error: the module at /path/to/cpp-swift-mwe/Sources/cpplib
        does not contain any source files
 fix:   either remove the module folder, or add a source file to the module
 ~~~
@@ -87,7 +87,7 @@ clang: error: linker command failed with exit code 1 (use -v to see invocation)
 <unknown>:0: error: build had 1 command failures
 ~~~
 
-Apparently, the folder provided by `-L` does not take precedence as the 
+Apparently, the folder provided by `-L` does not take precedence as the
 documentation promises.
 
 
@@ -95,21 +95,41 @@ documentation promises.
 
 The problem is with who looks for libraries where.
 
-@aciidb0mb3r proposes a workaround in 
+@aciidb0mb3r proposes a workaround in
 [swiftpm.slack](https://swiftpm.slack.com/archives/help/p1486035484001308):
 
 > Run these two commands once:
 >
 > ~~~bash
-> mv Dependencies/libcpplib.dylib Dependencies/libcpplibVendored.dylib 
+> mv Dependencies/libcpplib.dylib Dependencies/libcpplibVendored.dylib
 > install_name_tool -id @executable_path/../../Dependencies/libcpplibVendored.dylib \
 >                   Dependencies/libcpplibVendored.dylib
 > ~~~
 >
 > Then use option `-Xlinker -lcpplibVendored` instead of `-Xlinker -lcpplib`.
 
-This fixed the build but does not generate a shippable product, 
+This fixes the build but does not generate a shippable product,
 since in production the paths will be different.
+
+I filed a [feature request](https://bugs.swift.org/browse/SR-3832) towards
+support of non-system binary dependencies.
+
+## Attempt 3: A Makefile
+
+Needed to do [this](http://stackoverflow.com/a/16058799/539599), but as `.cpp`.
+
+Then, it is mostly copying `.build/debug.yaml` (for now; release later) from Starting Point
+into another build tool and replace compilation of the C++ library with some copying
+instructions.
+
+In order to make the process less arduous the next time around, I have built
+    [a `configure` script]()
+that should deal with other projects that use the same structure.
+
+### Open Problems
+
+ * Where does `cwrapper.modulemap` come from? Creating it "manually" for now.
+ * WIP
 
 
 ## Thoughts

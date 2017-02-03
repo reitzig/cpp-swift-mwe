@@ -1,6 +1,8 @@
-#import "include/cwrapper.h"
-#import "cpplib.h"
+#include "include/cwrapper.h"
+#include "../cpplib/include/cpplib.h"
 
-int cwrapperfive() {
-    return cpplib::five();
+extern "C" {
+    int cwrapperfive() {
+        return cpplib::five();
+    }
 }
