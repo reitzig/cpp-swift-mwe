@@ -138,6 +138,7 @@ $ .build/debug/swift
 
 ### Open Problems
 
+ * Does this work with `libswift.a` just as well?
  * Where does `cwrapper.modulemap` come from? Creating it "manually" for now.
  * Modulemap files are probably broken if there is more than one C header.
  * Will need adapting for building Swift libraries.
