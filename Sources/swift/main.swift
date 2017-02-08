@@ -1,3 +1,3 @@
 import cwrapper
 
-print(cwrapperfive())
+print("\(cwrapperfive())" + A().foo())
