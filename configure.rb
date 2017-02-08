@@ -43,7 +43,7 @@ ARCH    = "x86_64"
 BIT     = "64"
 OSV     = "-mmacosx-version-min=10.10"
 TARGET  = "x86_64-apple-macosx10.10"
-OPT     = { c: ["-O0"], swift: ["-Onone"] } # release: [-O3] (?) and [-O, wmo]
+OPT     = { c: ["-O0"], swift: ["-Onone"] } # release: [-O3] (?) and [-O, -whole-module-optimization]
 # O2: most opts; O3: more opts, larger code; Oz like O2 but smaller code; O = O2
 
 
@@ -109,10 +109,27 @@ class MakeRule
     def to_s
         deps = @dependencies.join(" ")
         cmds = @commands.map { |cmd|
-            "\t" + cmd.join(" ")
+            if cmd.is_a?(Array)
+                cmd = cmd.join(" ")
+            else
+                cmd = cmd.to_s
+            end
+
+            "\t#{cmd}"
         }.join("\n")
 
         "#{@target}: #{deps}\n#{cmds}"
+    end
+end
+
+class MakeWriteFile < MakeRule
+    def initialize(target, filename, content)
+        commands = ["@echo -n \"\" > \"#{filename}\""] +
+        content.split("\n").map { |line|
+            "@echo \"#{line}\" >> \"#{filename}\""
+        }
+
+        super(target, [], commands)
     end
 end
 
@@ -258,12 +275,7 @@ C_DIRS.each { |dir|
     export *
 }}
     # TODO what if there are more headers? Do we include all as "umbrella"?
-    targets << MakeRule.new("#{dir}.modulemap",
-                            [],
-                            [["@echo \"\" > #{mmap}"]] +
-                            content.split("\n").map { |line|
-                                ["@echo \"#{line}\" >> #{mmap}"]
-                            })
+    targets << MakeWriteFile.new("#{dir}.modulemap", mmap, content)
 }
 
 # # # # #
@@ -271,26 +283,56 @@ C_DIRS.each { |dir|
 # # # # #
 
 targets << MakeRule.new("build-swift",
-                        ["build-c"] + SWIFT_DIRS.map { |d| libname(d) })
+                        ["build-c"] + SWIFT_DIRS.map { |d| libname(d) } +
+                                      SWIFT_DIRS.select { |d|
+                                          File.exist?("#{SOURCE_DIR}/#{d}/main.swift")
+                                      }.map { |d| "#{d}.exe"}
+                        )
 
 SWIFT_DIRS.each { |dir|
-    #targets << MakeDef.new("VPATH", "#{SOURCE_DIR}/#{dir}")
+    builddir = "#{BUILD_DIR}/#{CONFIG.to_s}"
+    tmpdir = "#{builddir}/#{dir}.build"
+    sources = Dir["#{SOURCE_DIR}/#{dir}/**/*.{swift}"]
+
+    # # # # #
+    # Construct output file mappings
+    # # # # #
+
+    individuals = sources.map { |src|
+        basename = new_ending(File.basename(src), "")
+
+        %{      \\\"#{abspath(src)}\\\": {
+           \\\"object\\\": \\\"#{abspath(tmpdir)}/#{basename}o\\\",
+           \\\"dependencies\\\": \\\"#{abspath(tmpdir)}/#{basename}d\\\",
+           \\\"swift-dependencies\\\": \\\"#{abspath(tmpdir)}/#{basename}swiftdeps\\\",
+           \\\"diagnostics\\\": \\\"#{abspath(tmpdir)}/#{basename}dia\\\"
+         }}
+    }
+
+    general = %{    \\\"\\\": {
+        \\\"swift-dependencies\\\": \\\"#{abspath(tmpdir)}/main-build-record.swiftdeps\\\"
+    }}
+
+    filemappings = "{\n#{individuals.join(",\n")},\n#{general}\n}"
+
+    targets << MakeWriteFile.new("#{dir}.output-file-map",
+                                 "#{abspath(tmpdir)}/output-file-map.json",
+                                 filemappings)
 
     # # # # #
     # Build Swift library
     # # # # #
 
-    tmpdir = "#{BUILD_DIR}/#{CONFIG.to_s}/#{dir}.build"
-    sources = Dir["#{SOURCE_DIR}/#{dir}/**/*.{swift}"]
-    objects = sources.map { |src|
-        s = File.basename(src) #.sub!(/^#{dir}/, "")
-        new_ending("#{tmpdir}/#{s}", :o)
-    }
-
     targets << MakeRule.new(libname(dir),
-                            sources + ["copydeps"] + C_DIRS.map { |d| libname(d) },
+                            sources + ["copydeps"] +
+                                      C_DIRS.map { |d| libname(d) } +
+                                      ["#{dir}.output-file-map"],
                             [[SWIFTC,
-                                "-I", abspath("#{BUILD_DIR}/#{CONFIG.to_s}"),
+                                "-emit-object", # TODO ?
+                                #"-emit-module-path", abspath(builddir), # TODO ?
+                                "-module-name", dir,
+                                "-output-file-map", "#{abspath(tmpdir)}/output-file-map.json",
+                                "-L", abspath(builddir),
                                 "-j#{CORES}",
                                 "-D", "SWIFT_PACKAGE"] +
                                 OPT[:swift] + [
@@ -298,30 +340,50 @@ SWIFT_DIRS.each { |dir|
                                 "-enable-testing",
                                 "-F", FRAMEWORKS,
                                 "-target", TARGET,
+                                # "-target-cpu", ??? # TODO
                                 "-sdk", SYSROOT] +
                                 C_DIRS.map { |cdir|
-                                    ctmpdir = "#{BUILD_DIR}/#{CONFIG.to_s}/#{cdir}.build"
+                                    ctmpdir = "#{builddir}/#{cdir}.build"
                                     ["-Xcc","-fmodule-map-file=#{abspath(ctmpdir)}/module.modulemap", # TODO
                                     "-I", abspath("#{SOURCE_DIR}/#{cdir}/include"),
                                 ]}.flatten + [
-                                "-module-cache-path", abspath("#{BUILD_DIR}/#{CONFIG.to_s}/ModuleCache")] +
+                                "-module-cache-path", abspath("#{builddir}/ModuleCache")] +
                                 sources.map { |s| abspath(s) }
                             ])
 
-    # TODO
-    #temps-path: "/Users/dhtp/Documents/cpp-swift-mwe/.build/debug/swift.build"
-    #objects: ["/Users/dhtp/Documents/cpp-swift-mwe/.build/debug/swift.build/main.swift.o"]
-    #is-library: false
+    #TODO missing: is-library: false
+    # --> -parse-as-library ? -emit-module ? -emit-library?
 
 
     # # # # #
     # Link Swift library
     # # # # #
-}
 
-# # # # #
-# Build Swift executable
-# # # # #
+    # TODO
+
+    # # # # #
+    # Build Swift executable
+    # # # # #
+    
+    if File.exist?("#{SOURCE_DIR}/#{dir}/main.swift")
+        targets << MakeRule.new("#{dir}.exe",
+                                [libname(dir)],
+                                [[SWIFTC,
+                                    "-target", TARGET,
+                                    # "-target-cpu", ??? # TODO
+                                    "-sdk", SYSROOT,
+                                    "-g",
+                                    "-F", FRAMEWORKS,
+                                    "-L", abspath(builddir),
+                                    "-o", "#{abspath(builddir)}/#{dir}",
+                                    "-emit-executable"] +
+                                    sources.map { |s|
+                                        o = new_ending(File.basename(s), :o)
+                                        "#{abspath(tmpdir)}/#{o}"
+                                    }
+                                    ])
+    end
+}
 
 # # # # #
 # Create fat library
@@ -344,5 +406,6 @@ SWIFT_DIRS.each { |dir|
 
 File.open("Makefile", "w") { |mf|
     mf.write("# Generated on #{Time.now.strftime("%Y-%m-%d %H:%M:%S")} by #{ENV['USERNAME'] || ENV['USER']}\n\n")
+    mf.write("SHELL = bash\n\n")
     mf.write(targets.join("\n\n"))
 }
