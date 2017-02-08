@@ -20,6 +20,10 @@ SYSROOT = "/Applications/Xcode8.2/Xcode.app/Contents/Developer/Platforms/MacOSX.
 CORES = 8
 
 # Define relevant project constants
+# TODO: read from Package.swift or CLI parameters
+
+# TODO: configuration: debug vs release --> build folder; opt levels
+# =>    Check release.yaml for other differences!
 
 SOURCE_DIR = "Sources"
 CPP_DIRS = ["cpplib"]
@@ -33,9 +37,6 @@ DEPENDENCIES = [
 
 # Extract parameters
 
-# TODO: configuration: debug vs release --> build folder; opt levels
-# =>    Check release.yaml for other differences!
-# TODO: take parameters from the outside!
 # TODO: iOS targets!
 
 CONFIG  = :debug
@@ -43,8 +44,11 @@ ARCH    = "x86_64"
 BIT     = "64"
 OSV     = "-mmacosx-version-min=10.10"
 TARGET  = "x86_64-apple-macosx10.10"
-OPT     = { c: ["-O0"], swift: ["-Onone"] } # release: [-O3] (?) and [-O, -whole-module-optimization]
-# O2: most opts; O3: more opts, larger code; Oz like O2 but smaller code; O = O2
+OPT     = { c: ["-O0"], swift: ["-Onone"] }
+# release:
+# OPT  = { c: ["-O3"], swift: ["-O", "-whole-module-optimization"] }
+# TODO which is the best C option?
+#      O2: most opts; O3: more opts, larger code; Oz like O2 but smaller code
 
 
 # # # # # # # # # # # # # # # # # # # #
@@ -53,7 +57,7 @@ OPT     = { c: ["-O0"], swift: ["-Onone"] } # release: [-O3] (?) and [-O, -whole
 #
 # # # # # # # # # # # # # # # # # # # #
 
-
+# Prints a message to the command line during Makefile construction
 def msg(msg, type = :info) # type one of :info, :warn, :error
     prefix = case type
     when :warn
@@ -68,19 +72,23 @@ def msg(msg, type = :info) # type one of :info, :warn, :error
     Process.exit if error
 end
 
+# Appends a new file ending
 def new_ending(sourcefile, type)
     #sourcefile.sub(/\.[^.]+$/, ".#{type.to_s}")
     "#{sourcefile}.#{type.to_s}"
 end
 
+# Returns the absolute path of the specified file
 def abspath(file)
     File.absolute_path(file)
 end
 
+# Returns the "library name" of the given module name.
 def libname(dir)
     "lib#{dir}.dylib"
 end
 
+# Represents a Makefile variable definition
 class MakeDef
     @name
     @value
@@ -95,6 +103,7 @@ class MakeDef
     end
 end
 
+# Represents a Makefile target/rule
 class MakeRule
     @target
     @dependencies = []
@@ -122,6 +131,7 @@ class MakeRule
     end
 end
 
+# Represents a Makefile target/rule that writes stuff into a file
 class MakeWriteFile < MakeRule
     def initialize(target, filename, content)
         commands = ["@echo -n \"\" > \"#{filename}\""] +
@@ -196,16 +206,6 @@ C_DIRS.each { |dir|
     # # # # #
     # Build C wrapper library
     # # # # #
-
-    #targets << MakeDef.new("VPATH", "#{SOURCE_DIR}/#{dir}")
-
-    # That didn't work. Since human readability is not important here,
-    # going the one-target-per-file route.
-    #
-    #    targets << MakeRule.new(dir, ["#{BUILD_DIR}/#{dir}/%.o"], [[CLANG]]) # TODO link
-    #targets << MakeRule.new("#{BUILD_DIR}/#{dir}/%.o",
-    #                        ["%.c", "%.cpp"],
-    #                        [[CLANG, "-F",FRAMEWORKS, "-fobjc-arc","-fmodules","-fmodule-name=#{dir}","-arch",ARCH,OSV,"-isysroot",SYSROOT,"-fmodules-cache-path=#{BUILD_DIR}/#{CONFIG.to_s}/ModuleCache","-g",OPT[:c],"-MD","-MT","dependencies","-MF","/Users/dhtp/Documents/cpp-swift-mwe/.build/debug/cpplib.build/empty.cpp.d","-c","/Users/dhtp/Documents/cpp-swift-mwe/Sources/cpplib/empty.cpp","-o","$@","-I","#{SOURCE_DIR}/#{dir}/include"]])
 
     o_files = []
     Dir["#{SOURCE_DIR}/#{dir}/**/*.{c,cpp}"].each { |src|
@@ -287,7 +287,7 @@ targets << MakeRule.new("build-swift",
                                       SWIFT_DIRS.select { |d|
                                           File.exist?("#{SOURCE_DIR}/#{d}/main.swift")
                                       }.map { |d| "#{d}.exe"}
-                        )
+                        ) # TODO add library target as dependency if there is one
 
 SWIFT_DIRS.each { |dir|
     builddir = "#{BUILD_DIR}/#{CONFIG.to_s}"
@@ -328,8 +328,7 @@ SWIFT_DIRS.each { |dir|
                                       C_DIRS.map { |d| libname(d) } +
                                       ["#{dir}.output-file-map"],
                             [[SWIFTC,
-                                "-emit-object", # TODO ?
-                                #"-emit-module-path", abspath(builddir), # TODO ?
+                                "-emit-object",
                                 "-module-name", dir,
                                 "-output-file-map", "#{abspath(tmpdir)}/output-file-map.json",
                                 "-L", abspath(builddir),
@@ -344,27 +343,28 @@ SWIFT_DIRS.each { |dir|
                                 "-sdk", SYSROOT] +
                                 C_DIRS.map { |cdir|
                                     ctmpdir = "#{builddir}/#{cdir}.build"
-                                    ["-Xcc","-fmodule-map-file=#{abspath(ctmpdir)}/module.modulemap", # TODO
+                                    ["-Xcc","-fmodule-map-file=#{abspath(ctmpdir)}/module.modulemap",
                                     "-I", abspath("#{SOURCE_DIR}/#{cdir}/include"),
                                 ]}.flatten + [
                                 "-module-cache-path", abspath("#{builddir}/ModuleCache")] +
                                 sources.map { |s| abspath(s) }
                             ])
 
-    #TODO missing: is-library: false
-    # --> -parse-as-library ? -emit-module ? -emit-library?
+    #TODO do we need to change something when building as library?
+    # --> -parse-as-library ? -emit-module-path ? -emit-library?
 
 
     # # # # #
     # Link Swift library
     # # # # #
 
-    # TODO
+    # TODO add target for linking Swift libraries
+    #      (create a lib at Starting Point and check what the YAML looks like)
 
     # # # # #
     # Build Swift executable
     # # # # #
-    
+
     if File.exist?("#{SOURCE_DIR}/#{dir}/main.swift")
         targets << MakeRule.new("#{dir}.exe",
                                 [libname(dir)],
@@ -390,6 +390,7 @@ SWIFT_DIRS.each { |dir|
 # # # # #
 
 # TODO build fat lib (or executable?) using lipo
+#      see e.g. https://gist.github.com/eladnava/0824d08da8f99419ef2c7b7fb6d4cc78
 
 # # # # #
 # Create Swift documentation

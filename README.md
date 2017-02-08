@@ -129,7 +129,11 @@ that should deal with other projects that use the same structure.
 ### Open Problems
 
  * Where does `cwrapper.modulemap` come from? Creating it "manually" for now.
- * WIP
+ * Modulemap files are probably broken if there is more than one C header.
+ * Will need adapting for building Swift libraries.
+ * Will probably not work properly if the (Swift) source folders contain subfolders.
+ * Will need adapting for building for iOS.
+ * `configure.rb` has its parameters hard-coded for now.
 
 
 ## Thoughts
