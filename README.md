@@ -126,6 +126,16 @@ In order to make the process less arduous the next time around, I have built
     [a `configure` script]()
 that should deal with other projects that use the same structure.
 
+This now works:
+
+~~~bash
+$ make clean
+$ ./configure.rb
+$ make
+$ .build/debug/swift
+5 -- all the way from C++!
+~~~
+
 ### Open Problems
 
  * Where does `cwrapper.modulemap` come from? Creating it "manually" for now.
