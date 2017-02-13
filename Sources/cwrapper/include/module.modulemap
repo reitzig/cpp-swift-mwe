@@ -1,0 +1,5 @@
+module cwrapper {
+    umbrella header "cwrapper.h"
+    link "cwrapper"
+    export *
+}

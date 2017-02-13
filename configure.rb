@@ -164,6 +164,8 @@ targets = []
 targets << MakeRule.new("build",
                         ["build-swift"])
 
+# TODO add target for distribution
+
 targets << MakeRule.new("clean",
                         [],
                         [["rm", "-rf", "#{BUILD_DIR}"]])
@@ -178,7 +180,7 @@ targets << MakeRule.new("mkbuilddir",
                         [],
                         [["mkdir", "-p", "#{BUILD_DIR}/#{CONFIG.to_s}/{#{build_dirs}}"]])
 
-targets << MakeRule.new("copydeps",
+targets << MakeRule.new("copy-deps",
                         DEPENDENCIES + ["mkbuilddir"],
                         DEPENDENCIES.map { |d| [
                         ["cp", d, "#{BUILD_DIR}/#{CONFIG.to_s}/"]#,
@@ -189,6 +191,15 @@ targets << MakeRule.new("copydeps",
                         #   ]
                         ]
                         }.flatten(1))
+
+if File.exist?("Package.swift")
+    targets << MakeRule.new("update-deps",
+                            [abspath("Package.swift")],
+                            ["swift package update"])
+else
+    targets << MakeRule.new("update-deps", [], [])
+end
+
 
 # # # # #
 # Build targets for C wrapper libraries
@@ -215,7 +226,7 @@ C_DIRS.each { |dir|
 
         o_files << o
         targets << MakeRule.new(o,
-                                [src, "copydeps"],
+                                [src, "copy-deps"],
                                 [[CLANG, "-F", FRAMEWORKS,
                                          "-fobjc-arc",
                                          "-fmodules",
@@ -248,7 +259,7 @@ C_DIRS.each { |dir|
     # # # # #
 
     targets << MakeRule.new(libname(dir),
-                            o_files + ["copydeps"],
+                            o_files + ["copy-deps"],
                             [[CLANG,
                             "-F", FRAMEWORKS,
                             #"-arch", ARCH,
@@ -264,18 +275,36 @@ C_DIRS.each { |dir|
     # # # # #
     # Write modulemap for C wrapper library
     # # # # #
-    # TODO is this the right way to do this?
 
-    headers = Dir["#{SOURCE_DIR}/#{dir}/include/*.h"].map { |f| abspath(f) }
-    mmap = abspath("#{BUILD_DIR}/#{CONFIG.to_s}/#{dir}.build/module.modulemap")
-    content =
-%{module #{dir} {
-    #{headers.map { |h| "umbrella header \\\"#{h}\\\""}.join("\n    ")}
-    link \\\"#{dir}\\\"
-    export *
-}}
-    # TODO what if there are more headers? Do we include all as "umbrella"?
-    targets << MakeWriteFile.new("#{dir}.modulemap", mmap, content)
+    source_mmap = "#{SOURCE_DIR}/#{dir}/include/module.modulemap"
+    build_mmap  = "#{BUILD_DIR}/#{CONFIG.to_s}/#{dir}.build/module.modulemap"
+
+    if File.exist?(source_mmap)
+        # Copy user-defined module map
+        #targets << MakeRule.new("#{dir}.modulemap",
+        #                        [source_mmap],
+        #                        [["sed", "-e 's#header \\\"\\(.*\\)\\.h\\\"#header \\\"#{abspath("#{SOURCE_DIR}/#{dir}/include")}/\\1\\.h\\\"#'",
+        #                          "\"#{abspath(source_mmap)}\"",
+        #                          "> \"#{abspath(build_mmap)}\""]])
+
+        # Copying is not necessary, we just need to pass the existing file
+        # to swift correctly (see below). Hence, dummy target so the
+        # dependency is of build-c is met.
+        targets << MakeRule.new("#{dir}.modulemap", [], [])
+    else
+        # Create a module map
+        headers = Dir["#{SOURCE_DIR}/#{dir}/include/*.h"].map { |f| abspath(f) }
+        mmap = abspath(build_mmap)
+        content =
+    %{module #{dir} {
+        #{headers.map { |h| "umbrella header \\\"#{h}\\\""}.join("\n    ")}
+        link \\\"#{dir}\\\"
+        export *
+    }}
+        # TODO what if there are more headers? Do we include all as "umbrella"?
+        # =>   Do we need a convention about filenames?
+        targets << MakeWriteFile.new("#{dir}.modulemap", mmap, content)
+    end
 }
 
 # # # # #
@@ -283,10 +312,11 @@ C_DIRS.each { |dir|
 # # # # #
 
 targets << MakeRule.new("build-swift",
-                        ["build-c"] + SWIFT_DIRS.map { |d| libname(d) } +
-                                      SWIFT_DIRS.select { |d|
-                                          File.exist?("#{SOURCE_DIR}/#{d}/main.swift")
-                                      }.map { |d| "#{d}.exe"}
+                        ["build-c", "update-deps"] +
+                        SWIFT_DIRS.map { |d| libname(d) } +
+                        SWIFT_DIRS.select { |d|
+                            File.exist?("#{SOURCE_DIR}/#{d}/main.swift")
+                        }.map { |d| "#{d}.exe"}
                         ) # TODO add library target as dependency if there is one
 
 SWIFT_DIRS.each { |dir|
@@ -324,7 +354,7 @@ SWIFT_DIRS.each { |dir|
     # # # # #
 
     targets << MakeRule.new(libname(dir),
-                            sources + ["copydeps"] +
+                            sources + ["copy-deps"] +
                                       C_DIRS.map { |d| libname(d) } +
                                       ["#{dir}.output-file-map"],
                             [[SWIFTC,
@@ -343,9 +373,24 @@ SWIFT_DIRS.each { |dir|
                                 "-sdk", SYSROOT] +
                                 C_DIRS.map { |cdir|
                                     ctmpdir = "#{builddir}/#{cdir}.build"
-                                    ["-Xcc","-fmodule-map-file=#{abspath(ctmpdir)}/module.modulemap",
-                                    "-I", abspath("#{SOURCE_DIR}/#{cdir}/include"),
-                                ]}.flatten + [
+
+                                    # Default: use the module map we have
+                                    # created. (see above)
+                                    mmap = abspath("#{ctmpdir}/module.modulemap")
+
+                                    # However, if there is one in the include directory,
+                                    # use that one.
+                                    # TODO be more flexible about the filename?
+                                    src_mmap = "#{SOURCE_DIR}/#{cdir}/include/module.modulemap"
+                                    if File.exist?(src_mmap)
+                                        mmap = abspath(src_mmap)
+                                    end
+
+                                    ["-Xcc",
+                                      "-fmodule-map-file=#{mmap}",
+                                      "-I", abspath("#{SOURCE_DIR}/#{cdir}/include"),
+                                    ]
+                                }.flatten + [
                                 "-module-cache-path", abspath("#{builddir}/ModuleCache")] +
                                 sources.map { |s| abspath(s) }
                             ])

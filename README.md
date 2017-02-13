@@ -123,7 +123,7 @@ into another build tool and replace compilation of the C++ library with some cop
 instructions.
 
 In order to make the process less arduous the next time around, I have built
-    [a `configure` script]()
+    [a `configure` script](https://github.com/reitzig/cpp-swift-mwe/blob/master/configure.rb)
 that should deal with other projects that use the same structure.
 
 This now works:
@@ -139,8 +139,7 @@ $ .build/debug/swift
 ### Open Problems
 
  * Does this work with `libswift.a` just as well?
- * Where does `cwrapper.modulemap` come from? Creating it "manually" for now.
- * Modulemap files are probably broken if there is more than one C header.
+ * Generated modulemap files are probably broken if there is more than one C header.
  * Will need adapting for building Swift libraries.
  * Will probably not work properly if the (Swift) source folders contain subfolders.
  * Will need adapting for building for iOS.
